@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0a0c10">
+  <title>RDR3 Discoveries Explorer</title>
+  <style>
+    :root{color-scheme:dark;--bg:#080a0d;--panel:#10141a;--panel2:#171c24;--line:#282f3a;--text:#f5f1e8;--muted:#9da6b3;--red:#d22f32;--gold:#d6aa55}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 70% -10%,#331416 0,transparent 35%),var(--bg);color:var(--text);font:15px/1.55 system-ui,-apple-system,Segoe UI,sans-serif}
+    header{position:sticky;top:0;z-index:3;padding:18px clamp(18px,4vw,54px);background:#080a0de8;border-bottom:1px solid var(--line);backdrop-filter:blur(12px);display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+    .brand{font-family:Georgia,serif;font-size:clamp(20px,3vw,30px);font-weight:800;letter-spacing:.04em}.brand b{color:var(--red)}
+    .search{flex:1;min-width:240px;position:relative}.search input{width:100%;padding:13px 16px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text);font:inherit;outline:none}.search input:focus{border-color:var(--red);box-shadow:0 0 0 3px #d22f3225}
+    main{display:grid;grid-template-columns:minmax(270px,380px) 1fr;gap:20px;max-width:1600px;margin:auto;padding:22px clamp(18px,4vw,54px) 60px}
+    .card{background:#10141ae8;border:1px solid var(--line);border-radius:14px;overflow:hidden}.card h2{font:700 17px Georgia,serif;margin:0;padding:15px 18px;border-bottom:1px solid var(--line)}
+    #stats{color:var(--muted);font-size:13px;padding:10px 18px;border-bottom:1px solid var(--line)}#files{max-height:calc(100vh - 190px);overflow:auto}
+    .file{display:block;width:100%;padding:11px 16px;border:0;border-bottom:1px solid #202630;background:transparent;color:var(--text);text-align:left;cursor:pointer}.file:hover,.file.active{background:var(--panel2)}.file.active{box-shadow:inset 3px 0 var(--red)}.path{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.kind{color:var(--muted);font-size:12px}
+    .viewer-head{padding:15px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:12px;align-items:center}.viewer-head strong{overflow-wrap:anywhere}.viewer-head a{color:var(--gold);text-decoration:none;white-space:nowrap}
+    pre{margin:0;padding:20px;min-height:500px;max-height:calc(100vh - 190px);overflow:auto;background:#0b0e12;color:#dce3ea;font:13px/1.55 Consolas,monospace;tab-size:4}.empty{padding:70px 24px;text-align:center;color:var(--muted)}
+    .error{color:#ff8e8e}.loader{display:inline-block;width:13px;height:13px;border:2px solid #666;border-top-color:var(--red);border-radius:50%;animation:spin .7s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+    footer{text-align:center;color:var(--muted);padding:0 18px 30px}footer a{color:var(--gold)}
+    @media(max-width:800px){main{grid-template-columns:1fr}#files{max-height:42vh}pre{max-height:none;min-height:45vh}header{position:relative}}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand"><b>RDR3</b> DISCOVERIES</div>
+    <label class="search"><input id="search" type="search" placeholder="Rechercher animations, audio, armes, peds…" autocomplete="off"></label>
+  </header>
+  <main>
+    <section class="card">
+      <h2>Fichiers du dépôt</h2>
+      <div id="stats"><span class="loader"></span> Chargement de la branche master…</div>
+      <div id="files"></div>
+    </section>
+    <section class="card">
+      <div class="viewer-head"><strong id="title">Sélectionnez un fichier</strong><a id="github" href="https://github.com/AppiceSiteOfficial/rdr3_discoveries" target="_blank" rel="noreferrer">Voir sur GitHub ↗</a></div>
+      <div id="empty" class="empty">Explorez toutes les découvertes de Red Dead Redemption 2 directement depuis le dépôt.</div>
+      <pre id="content" hidden></pre>
+    </section>
+  </main>
+  <footer>Données issues de <a href="https://github.com/femga/rdr3_discoveries">femga/rdr3_discoveries</a>.</footer>
+  <script>
+    const owner='AppiceSiteOfficial',repo='rdr3_discoveries',branch='master';
+    const api=`https://api.github.com/repos/${owner}/${repo}`;
+    const raw=`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/`;
+    const els={search:document.querySelector('#search'),files:document.querySelector('#files'),stats:document.querySelector('#stats'),title:document.querySelector('#title'),content:document.querySelector('#content'),empty:document.querySelector('#empty'),github:document.querySelector('#github')};
+    let all=[],shown=[],active='';
+    const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+    function render(){
+      const q=els.search.value.trim().toLowerCase();
+      shown=all.filter(x=>!q||x.path.toLowerCase().includes(q)).slice(0,700);
+      els.stats.textContent=`${all.length.toLocaleString('fr-FR')} fichiers · ${shown.length}${shown.length===700?' premiers':''} affichés`;
+      els.files.innerHTML=shown.map((f,i)=>`<button class="file${f.path===active?' active':''}" data-i="${i}"><span class="path">${esc(f.path)}</span><span class="kind">${f.path.split('.').pop().toUpperCase()}</span></button>`).join('')||'<div class="empty">Aucun résultat</div>';
+    }
+    async function openFile(file){
+      active=file.path;render();els.title.textContent=file.path;els.empty.hidden=true;els.content.hidden=false;els.content.textContent='Chargement…';els.github.href=`https://github.com/${owner}/${repo}/blob/${branch}/${file.path.split('/').map(encodeURIComponent).join('/')}`;
+      try{const r=await fetch(raw+file.path.split('/').map(encodeURIComponent).join('/'));if(!r.ok)throw Error(`HTTP ${r.status}`);els.content.textContent=await r.text()}catch(e){els.content.textContent=`Impossible de charger ce fichier : ${e.message}`;els.content.className='error'}
+    }
+    els.search.addEventListener('input',render);
+    els.files.addEventListener('click',e=>{const b=e.target.closest('[data-i]');if(b)openFile(shown[Number(b.dataset.i)])});
+    (async()=>{try{const r=await fetch(`${api}/git/trees/${branch}?recursive=1`,{headers:{Accept:'application/vnd.github+json'}});if(!r.ok)throw Error(`GitHub API ${r.status}`);const data=await r.json();all=data.tree.filter(x=>x.type==='blob'&&/\.(lua|md|txt|json|xml|meta|cfg)$/i.test(x.path));render()}catch(e){els.stats.innerHTML=`<span class="error">Chargement impossible : ${esc(e.message)}</span>`}})();
+  </script>
+</body>
+</html>
