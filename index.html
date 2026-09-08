@@ -18,10 +18,13 @@
     .file{display:block;width:100%;padding:11px 16px;border:0;border-bottom:1px solid #202630;background:transparent;color:var(--text);text-align:left;cursor:pointer}.file:hover,.file.active{background:var(--panel2)}.file.active{box-shadow:inset 3px 0 var(--red)}.path{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.kind{color:var(--muted);font-size:12px}
     .viewer-head{padding:15px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:12px;align-items:center}.viewer-head strong{overflow-wrap:anywhere}.viewer-head a{color:var(--gold);text-decoration:none;white-space:nowrap}
     pre{margin:0;padding:20px;min-height:500px;max-height:calc(100vh - 190px);overflow:auto;background:#0b0e12;color:#dce3ea;font:13px/1.55 Consolas,monospace;tab-size:4}.empty{padding:70px 24px;text-align:center;color:var(--muted)}
+    #markdown{padding:22px;max-height:calc(100vh - 190px);overflow:auto;background:#0b0e12;color:#dce3ea}#markdown h1,#markdown h2,#markdown h3{font-family:Georgia,serif;color:var(--text);border-bottom:1px solid var(--line);padding-bottom:.3em}#markdown a{color:var(--gold)}#markdown img{max-width:100%}#markdown code{background:#171c24;border-radius:5px;padding:.15em .35em}#markdown pre{min-height:0;max-height:none;border:1px solid var(--line);border-radius:9px;padding:14px}#markdown pre code{padding:0;background:transparent}#markdown blockquote{margin-left:0;padding-left:16px;border-left:4px solid var(--red);color:var(--muted)}#markdown table{border-collapse:collapse;display:block;overflow:auto}#markdown th,#markdown td{border:1px solid var(--line);padding:7px 11px;text-align:left}#markdown th{background:var(--panel2)}
     .error{color:#ff8e8e}.loader{display:inline-block;width:13px;height:13px;border:2px solid #666;border-top-color:var(--red);border-radius:50%;animation:spin .7s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
     footer{text-align:center;color:var(--muted);padding:0 18px 30px}footer a{color:var(--gold)}
     @media(max-width:800px){main{grid-template-columns:1fr}#files{max-height:42vh}pre{max-height:none;min-height:45vh}header{position:relative}}
   </style>
+  <script defer src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"></script>
 </head>
 <body>
   <header>
@@ -38,6 +41,7 @@
     <section class="card">
       <div class="viewer-head"><strong id="title">Sélectionnez un fichier</strong><a id="github" href="https://github.com/AppiceSiteOfficial/rdr3_discoveries" target="_blank" rel="noreferrer">Voir sur GitHub ↗</a></div>
       <div id="empty" class="empty">Explorez toutes les découvertes de Red Dead Redemption 2 directement depuis le dépôt.</div>
+      <article id="markdown" hidden></article>
       <pre id="content" hidden></pre>
     </section>
   </main>
@@ -46,7 +50,7 @@
     const owner='AppiceSiteOfficial',repo='rdr3_discoveries',branch='master';
     const api=`https://api.github.com/repos/${owner}/${repo}`;
     const raw=`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/`;
-    const els={search:document.querySelector('#search'),files:document.querySelector('#files'),stats:document.querySelector('#stats'),title:document.querySelector('#title'),content:document.querySelector('#content'),empty:document.querySelector('#empty'),github:document.querySelector('#github')};
+    const els={search:document.querySelector('#search'),files:document.querySelector('#files'),stats:document.querySelector('#stats'),title:document.querySelector('#title'),content:document.querySelector('#content'),markdown:document.querySelector('#markdown'),empty:document.querySelector('#empty'),github:document.querySelector('#github')};
     const back=document.querySelector('#back'),crumbs=document.querySelector('#crumbs');
     let all=[],shown=[],active='',currentPath='';
     const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
@@ -67,8 +71,9 @@
       els.files.innerHTML=shown.map((f,i)=>{const name=q?f.path:f.path.split('/').pop();const kind=f.type==='tree'?'DOSSIER':((name.split('.').pop()||'FICHIER').toUpperCase());return `<button class="file${f.path===active?' active':''}" data-i="${i}"><span class="path">${icon(f)} ${esc(name)}</span><span class="kind">${kind}</span></button>`}).join('')||'<div class="empty">Aucun élément</div>';
     }
     async function openFile(file){
-      active=file.path;render();els.title.textContent=file.path;els.empty.hidden=true;els.content.hidden=false;els.content.textContent='Chargement…';els.github.href=`https://github.com/${owner}/${repo}/blob/${branch}/${file.path.split('/').map(encodeURIComponent).join('/')}`;
-      try{const r=await fetch(raw+file.path.split('/').map(encodeURIComponent).join('/'));if(!r.ok)throw Error(`HTTP ${r.status}`);els.content.textContent=await r.text()}catch(e){els.content.textContent=`Impossible de charger ce fichier : ${e.message}`;els.content.className='error'}
+      const isMarkdown=/\.md$/i.test(file.path);
+      active=file.path;render();els.title.textContent=file.path;els.empty.hidden=true;els.content.hidden=isMarkdown;els.markdown.hidden=!isMarkdown;els.content.className='';els.markdown.className='';(isMarkdown?els.markdown:els.content).textContent='Chargement…';els.github.href=`https://github.com/${owner}/${repo}/blob/${branch}/${file.path.split('/').map(encodeURIComponent).join('/')}`;
+      try{const r=await fetch(raw+file.path.split('/').map(encodeURIComponent).join('/'));if(!r.ok)throw Error(`HTTP ${r.status}`);const text=await r.text();if(isMarkdown){if(!window.marked||!window.DOMPurify)throw Error('Moteur Markdown indisponible');els.markdown.innerHTML=DOMPurify.sanitize(marked.parse(text))}else{els.content.textContent=text}}catch(e){const target=isMarkdown?els.markdown:els.content;target.textContent=`Impossible de charger ce fichier : ${e.message}`;target.className='error'}
     }
     els.search.addEventListener('input',render);
     back.addEventListener('click',()=>{if(!currentPath)return;currentPath=currentPath.includes('/')?currentPath.slice(0,currentPath.lastIndexOf('/')):'';render()});
